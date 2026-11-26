@@ -3,23 +3,27 @@
 <meta name="robots" content="noindex"><title>検査設備 事前入力フォーム</title></head>
 <body style="font-family:sans-serif;padding:24px">フォームを開いています…
 <script>
-// ===== 台帳データ（1設備＝1行。設備を追加するときはこの中に行を足す） =====
-// 並び：管理No, 校正年月日, 名称, 製造メーカー, 型式, 製造番号, 校正周期, 校正区分, 所属, 使用場所, 備考
-var DATA = [
-  ["B26125671", "2027-07-01", "ノギス", "ミツトヨ", "CD-20APX", "B26125671", "1年", "内部", "製造部", "製品検査担当", ""],
-];
-// ===== ここから下は変更不要 =====
+// タグのURL： https://cookie8162505.github.io/kousei/?管理No,名称,製造メーカー,型式,製造番号,校正周期,校正区分,所属,使用場所
+// 後ろの項目は省略可（カンマ区切り、途中を空けるときは ,, ）
 var F = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=a_y3pO0IUkeG6NnOptX52WLA_P1HfHhJgRWlYdfc0jZUOExOTk8zNUJOQ1NPUVBBNzlaRTJHSUgxUC4u";
-var Q = ["r6993eac4ca69458dbb387eacbc1a8479","r618d943d2b604ea29bdd41f4f1dbe81d","rb6d2a6e0ac3c48d0a7374b08a2f482c5","r5bbe751708184ca3ab634bede6ca56a1","r9ce336b6014e4f2691b29cc27bf98f1a","rdca11b044e1b40ed866f106d824bc87f","re84fc8b552ac406bac5b1fddd0bff4eb","rc3abc68330b34ddfad2386db62f4e45c","r383f491a0cb047f7987b9f5862866710","r06bece4ccf59436189f0cd4bc8c0ff21","r65e4dc1e856645f4b0ce1e1186695898"];
+var Q = [
+  "r6993eac4ca69458dbb387eacbc1a8479", // 管理No
+  "rb6d2a6e0ac3c48d0a7374b08a2f482c5", // 名称
+  "r5bbe751708184ca3ab634bede6ca56a1", // 製造メーカー
+  "r9ce336b6014e4f2691b29cc27bf98f1a", // 型式
+  "rdca11b044e1b40ed866f106d824bc87f", // 製造番号
+  "re84fc8b552ac406bac5b1fddd0bff4eb", // 校正周期
+  "rc3abc68330b34ddfad2386db62f4e45c", // 校正区分
+  "r383f491a0cb047f7987b9f5862866710", // 所属
+  "r06bece4ccf59436189f0cd4bc8c0ff21"  // 使用場所
+];
 (function(){
-  var k = location.search.slice(1) || location.hash.slice(1);
-  try { k = decodeURIComponent(k.replace(/\+/g, " ")).trim(); } catch (e) {}
-  var row = null;
-  for (var i = 0; i < DATA.length; i++) { if (DATA[i][0] === k) { row = DATA[i]; break; } }
-  if (!row) row = k ? [k] : [];
-  var url = F;
-  for (var j = 0; j < row.length && j < Q.length; j++) {
-    if (row[j] !== "") url += "&" + Q[j] + "=" + encodeURIComponent(row[j]);
+  var s = location.search.slice(1) || location.hash.slice(1);
+  try { s = decodeURIComponent(s.replace(/\+/g, " ")); } catch (e) {}
+  var v = s.split(","), url = F;
+  for (var i = 0; i < v.length && i < Q.length; i++) {
+    var x = v[i].trim();
+    if (x) url += "&" + Q[i] + "=" + encodeURIComponent(x);
   }
   location.replace(url);
 })();
