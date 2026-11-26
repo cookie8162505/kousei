@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>検査設備 位置マップ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root { --ink:#1d2330; --mut:#667085; --line:#d9dde4; --acc:#1f6feb; --bg:#f6f7f9; }
+  * { box-sizing:border-box; min-width:0; }
+  body { margin:0; font-family:"Yu Gothic UI","Meiryo",system-ui,sans-serif; color:var(--ink); background:var(--bg); font-size:14px; }
+  header { background:#1d2330; color:#fff; padding:10px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; flex:1 1 auto; }
+  header button { background:#fff; color:#1d2330; border:0; border-radius:6px; padding:6px 12px; font:inherit; cursor:pointer; }
+  #wrap { display:grid; grid-template-columns:minmax(0,1fr) 420px; height:calc(100vh - 48px); }
+  #map { height:100%; background:#e5e9ef; }
+  #side { display:flex; flex-direction:column; border-left:1px solid var(--line); background:#fff; }
+  #side .top { padding:10px; border-bottom:1px solid var(--line); }
+  #q { width:100%; font:inherit; font-size:16px; padding:8px; border:1px solid var(--line); border-radius:6px; }
+  #count { color:var(--mut); font-size:12px; margin-top:6px; }
+  #list { overflow:auto; flex:1; }
+  .item { padding:10px 12px; border-bottom:1px solid #eef0f3; cursor:pointer; }
+  .item:hover, .item.on { background:#eef4ff; }
+  .item b { font-size:15px; }
+  .item .s { color:var(--mut); font-size:12px; }
+  .item .nol { color:#b54708; font-size:12px; }
+  .item a { font-size:12px; color:var(--acc); }
+  .hist { font-size:12px; color:var(--mut); margin-top:4px; }
+  #paste { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:2000; padding:16px; }
+  #paste.show { display:flex; }
+  #paste .box { background:#fff; border-radius:10px; padding:18px; width:min(760px,100%); max-height:90vh; overflow:auto; }
+  #paste h2 { margin:0 0 6px; font-size:16px; }
+  #paste p { margin:4px 0 10px; color:var(--mut); font-size:13px; }
+  #txt { width:100%; min-height:220px; font-family:Consolas,monospace; font-size:12px; border:1px solid var(--line); border-radius:6px; padding:8px; }
+  .row { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; flex-wrap:wrap; align-items:center; }
+  .row button { background:var(--acc); color:#fff; border:0; border-radius:6px; padding:8px 16px; font:inherit; cursor:pointer; }
+  .row button.sub { background:#fff; color:var(--acc); border:1px solid var(--acc); }
+  #err { color:#cf222e; font-size:13px; margin-right:auto; }
+  #maperr { position:absolute; top:60px; left:12px; right:440px; background:#fff3cd; padding:8px 12px; border-radius:6px; font-size:13px; display:none; z-index:1000; }
+  .empty { padding:24px 16px; color:var(--mut); line-height:1.7; }
+  @media (max-width:760px) {
+    #wrap { grid-template-columns:1fr; grid-template-rows:45vh minmax(0,1fr); height:auto; min-height:calc(100vh - 48px); }
+    #side { border-left:0; border-top:1px solid var(--line); }
+    #maperr { right:12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>検査設備 位置マップ</h1>
+  <button id="openPaste">回答データを貼り付け</button>
+</header>
+<div id="maperr">地図を読み込めませんでした（社内ネットワークで地図サーバが遮断されている可能性があります）。一覧と「Googleマップで開く」は使えます。</div>
+<div id="wrap">
+  <div id="map"></div>
+  <div id="side">
+    <div class="top">
+      <input id="q" type="search" placeholder="管理No・名称・型式・所属で検索">
+      <div id="count"></div>
+    </div>
+    <div id="list"><div class="empty">右上の「回答データを貼り付け」から、Formsの回答Excelを<b>見出し行ごと</b>コピーして貼り付けてください。<br>ExcelファイルやCSVファイルを読み込むこともできます。</div></div>
+  </div>
+</div>
+
+<div id="paste">
+  <div class="box">
+    <h2>回答データを貼り付け</h2>
+    <p>Formsの回答Excelで、見出し行を含めて表全体を選択してコピーし、下に貼り付けてください。データはこのブラウザの中だけで処理し、外部には送信しません。</p>
+    <textarea id="txt" placeholder="ID	開始時刻	完了時刻	メール	名前	管理No	名称	…	位置情報"></textarea>
+    <div class="row">
+      <span id="err"></span>
+      <label class="sub" style="font-size:13px;cursor:pointer;color:var(--acc)">ファイルを読み込む（.xlsx / .csv）<input id="file" type="file" accept=".xlsx,.xls,.csv" style="display:none"></label>
+      <button class="sub" id="cancel">閉じる</button>
+      <button id="load">表示する</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+{
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const norm = s => String(s == null ? "" : s).normalize("NFKC").replace(/[\s　]/g, "").toLowerCase();
+
+  // 見出しの名前で列を判別
+  const COLS = {
+    no: ["管理no", "管理番号"], name: ["名称"], maker: ["メーカー"], model: ["型式"], serial: ["製造番号"],
+    dept: ["所属"], place: ["使用場所"], loc: ["位置"], time: ["完了時刻", "開始時刻", "日時"], who: ["名前"]
+  };
+
+  // TSV/CSV（引用符・セル内改行に対応）
+  function parseDelimited(text) {
+    text = text.replace(/\r\n?/g, "\n");
+    const first = text.split("\n")[0];
+    const d = first.includes("\t") ? "\t" : ",";
+    const rows = []; let row = [], cell = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+        else cell += c;
+      } else if (c === '"' && cell === "") q = true;
+      else if (c === d) { row.push(cell); cell = ""; }
+      else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+      else cell += c;
+    }
+    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(r => r.some(x => String(x).trim() !== ""));
+  }
+
+  function parseLoc(s) {
+    const m = String(s || "").normalize("NFKC").match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)(?:[^±]*±\s*(\d+))?/);
+    if (!m) return null;
+    const lat = +m[1], lng = +m[2];
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng, acc: m[3] ? +m[3] : null };
+  }
+
+  function fmtTime(v) {
+    if (v instanceof Date && !isNaN(v)) {
+      const p = n => String(n).padStart(2, "0");
+      return v.getFullYear() + "/" + p(v.getMonth() + 1) + "/" + p(v.getDate()) + " " + p(v.getHours()) + ":" + p(v.getMinutes());
+    }
+    return String(v == null ? "" : v).trim();
+  }
+  function timeKey(s) { const t = Date.parse(String(s).replace(/\//g, "-").replace(" ", "T")); return isNaN(t) ? 0 : t; }
+
+  let groups = [], selected = null;
+
+  function build(rows) {
+    if (rows.length < 2) throw new Error("見出し行とデータ行が必要です。");
+    const hdr = rows[0].map(norm);
+    const idx = {};
+    for (const k in COLS) { idx[k] = -1; for (const w of COLS[k]) { const i = hdr.findIndex(h => h.includes(norm(w))); if (i >= 0) { idx[k] = i; break; } } }
+    if (idx.no < 0) throw new Error("「管理No」の列が見つかりません。見出し行も含めてコピーしてください。");
+    const recs = rows.slice(1).map(r => {
+      const g = k => idx[k] >= 0 ? fmtTime(r[idx[k]]) : "";
+      return { no: g("no"), name: g("name"), maker: g("maker"), model: g("model"), serial: g("serial"),
+               dept: g("dept"), place: g("place"), who: g("who"), time: g("time"), loc: parseLoc(idx.loc >= 0 ? r[idx.loc] : "") };
+    }).filter(r => r.no);
+    const map = new Map();
+    for (const r of recs) { if (!map.has(r.no)) map.set(r.no, []); map.get(r.no).push(r); }
+    groups = [...map.entries()].map(([no, list]) => {
+      list.sort((a, b) => timeKey(b.time) - timeKey(a.time));
+      const latest = list[0];
+      const withLoc = list.find(x => x.loc);
+      const info = {};
+      for (const k of ["name", "maker", "model", "serial", "dept", "place"]) info[k] = (list.find(x => x[k]) || {})[k] || "";
+      return { no, list, latest, loc: withLoc ? withLoc.loc : null, locTime: withLoc ? withLoc.time : "", ...info };
+    }).sort((a, b) => a.no.localeCompare(b.no, "ja"));
+  }
+
+  // 地図
+  let map = null, layer = null;
+  const markers = new Map();
+  try {
+    map = L.map("map").setView([35.3, 138.93], 13);
+    const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+    let ok = false;
+    tiles.on("tileload", () => { ok = true; $("maperr").style.display = "none"; });
+    tiles.on("tileerror", () => { if (!ok) $("maperr").style.display = "block"; });
+    layer = L.layerGroup().addTo(map);
+  } catch (e) { $("maperr").style.display = "block"; }
+
+  const gmap = l => "https://www.google.com/maps/search/?api=1&query=" + l.lat + "," + l.lng;
+  function popup(g) {
+    return "<b>" + esc(g.no) + "</b> " + esc(g.name) + "<br>" + esc([g.maker, g.model].filter(Boolean).join(" / ")) +
+      "<br><small>読取：" + esc(g.locTime) + (g.loc.acc != null ? "（±" + g.loc.acc + "m）" : "") + "</small>" +
+      "<br><a href='" + gmap(g.loc) + "' target='_blank' rel='noopener'>Googleマップで開く</a>";
+  }
+
+  function drawMarkers(list) {
+    if (!layer) return;
+    layer.clearLayers(); markers.clear();
+    const pts = [];
+    for (const g of list) {
+      if (!g.loc) continue;
+      const m = L.circleMarker([g.loc.lat, g.loc.lng], { radius: 9, color: "#fff", weight: 2, fillColor: "#1f6feb", fillOpacity: .9 })
+        .bindPopup(popup(g)).addTo(layer);
+      if (g.loc.acc) L.circle([g.loc.lat, g.loc.lng], { radius: g.loc.acc, color: "#1f6feb", weight: 1, fillOpacity: .06, interactive: false }).addTo(layer);
+      m.on("click", () => select(g.no, false));
+      markers.set(g.no, m); pts.push([g.loc.lat, g.loc.lng]);
+    }
+    if (pts.length === 1) map.setView(pts[0], 18);
+    else if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 18 });
+  }
+
+  function filtered() {
+    const q = norm($("q").value);
+    if (!q) return groups;
+    return groups.filter(g => norm([g.no, g.name, g.maker, g.model, g.serial, g.dept, g.place].join(" ")).includes(q));
+  }
+
+  function renderList() {
+    const list = filtered();
+    $("count").textContent = groups.length ? list.length + " / " + groups.length + " 台（位置あり " + list.filter(g => g.loc).length + " 台）" : "";
+    if (!groups.length) return;
+    $("list").innerHTML = list.map(g =>
+      "<div class='item" + (g.no === selected ? " on" : "") + "' data-no='" + esc(g.no) + "'>" +
+      "<b>" + esc(g.no) + "</b>　" + esc(g.name) +
+      "<div class='s'>" + esc([g.maker, g.model, g.dept, g.place].filter(Boolean).join(" ／ ")) + "</div>" +
+      (g.loc
+        ? "<div class='s'>最終位置：" + esc(g.locTime) + (g.loc.acc != null ? "（±" + g.loc.acc + "m）" : "") + "　<a href='" + gmap(g.loc) + "' target='_blank' rel='noopener'>Googleマップで開く</a></div>"
+        : "<div class='nol'>位置情報なし</div>") +
+      (g.list.length > 1 && g.no === selected
+        ? "<div class='hist'>読取履歴（" + g.list.length + "件）<br>" + g.list.map(r => esc(r.time) + (r.who ? " " + esc(r.who) : "") + (r.loc ? "　" + r.loc.lat.toFixed(5) + "," + r.loc.lng.toFixed(5) : "　位置なし")).join("<br>") + "</div>"
+        : (g.list.length > 1 ? "<div class='hist'>読取 " + g.list.length + " 回</div>" : "")) +
+      "</div>").join("") || "<div class='empty'>該当する設備がありません。</div>";
+    drawMarkers(list);
+  }
+
+  function select(no, fly) {
+    selected = no;
+    renderList();
+    const g = groups.find(x => x.no === no);
+    if (fly !== false && g && g.loc && map) { map.setView([g.loc.lat, g.loc.lng], 18); const m = markers.get(no); if (m) m.openPopup(); }
+    const el = $("list").querySelector(".item.on"); if (el) el.scrollIntoView && el.scrollIntoView({ block: "nearest" });
+  }
+
+  function load(rows) {
+    build(rows);
+    selected = null;
+    renderList();
+    $("paste").classList.remove("show");
+  }
+
+  $("list").addEventListener("click", e => {
+    if (e.target.closest("a")) return;
+    const it = e.target.closest(".item"); if (it) select(it.dataset.no, true);
+  });
+  $("q").addEventListener("input", renderList);
+  $("openPaste").onclick = () => { $("err").textContent = ""; $("paste").classList.add("show"); $("txt").focus(); };
+  $("cancel").onclick = () => $("paste").classList.remove("show");
+  $("load").onclick = () => {
+    try {
+      const text = $("txt").value;
+      load(parseDelimited(text));
+      try { localStorage.setItem("kousei-map-data", text); } catch (e) {}
+    } catch (e) { $("err").textContent = e.message; }
+  };
+  $("file").onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        if (/\.csv$/i.test(f.name)) { load(parseDelimited(new TextDecoder("utf-8").decode(rd.result))); return; }
+        if (typeof XLSX === "undefined") throw new Error("Excel読込ライブラリを読み込めませんでした。貼り付けで試してください。");
+        const wb = XLSX.read(rd.result, { type: "array", cellDates: true });
+        load(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" }));
+      } catch (err) { $("err").textContent = err.message; }
+    };
+    rd.readAsArrayBuffer(f);
+    e.target.value = "";
+  };
+
+  // 前回貼り付けたデータを復元（このブラウザだけ）
+  try { const saved = localStorage.getItem("kousei-map-data"); if (saved) { $("txt").value = saved; load(parseDelimited(saved)); } } catch (e) {}
+}
+</script>
+</body>
+</html>

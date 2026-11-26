@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>検査設備 事前入力フォーム</title></head>
-<body style="font-family:sans-serif;padding:24px">フォームを開いています…
+<body style="font-family:sans-serif;padding:24px;font-size:18px">
+<p id="msg">位置情報を取得しています…<br><small>「許可」を押してください</small></p>
+<p><a id="skip" href="#" style="font-size:14px">位置情報なしで開く</a></p>
 <script>
 // タグのURL： https://cookie8162505.github.io/kousei/?管理No,名称,製造メーカー,型式,製造番号,校正周期,校正区分,所属,使用場所
-// 後ろの項目は省略可（カンマ区切り、途中を空けるときは ,, ）
 var F = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=a_y3pO0IUkeG6NnOptX52WLA_P1HfHhJgRWlYdfc0jZUOExOTk8zNUJOQ1NPUVBBNzlaRTJHSUgxUC4u";
 var Q = [
   "r6993eac4ca69458dbb387eacbc1a8479", // 管理No
@@ -17,15 +18,32 @@ var Q = [
   "r383f491a0cb047f7987b9f5862866710", // 所属
   "r06bece4ccf59436189f0cd4bc8c0ff21"  // 使用場所
 ];
+var QLOC = "rcd5d447f78d446e68c210c9729ff27df"; // 位置情報
+
 (function(){
   var s = location.search.slice(1) || location.hash.slice(1);
   try { s = decodeURIComponent(s.replace(/\+/g, " ")); } catch (e) {}
-  var v = s.split(","), url = F;
+  var v = s.split(","), base = F;
   for (var i = 0; i < v.length && i < Q.length; i++) {
     var x = v[i].trim();
-    if (x) url += "&" + Q[i] + "=" + encodeURIComponent(x);
+    if (x) base += "&" + Q[i] + "=" + encodeURIComponent(x);
   }
-  location.replace(url);
+  var done = false;
+  function go(loc) {
+    if (done) return; done = true;
+    location.replace(loc ? base + "&" + QLOC + "=" + encodeURIComponent(loc) : base);
+  }
+  document.getElementById("skip").onclick = function (e) { e.preventDefault(); go(""); };
+  if (!navigator.geolocation) { go(""); return; }
+  setTimeout(function () { go(""); }, 8000); // 最大8秒待って位置なしで開く
+  navigator.geolocation.getCurrentPosition(
+    function (p) {
+      var c = p.coords;
+      go(c.latitude.toFixed(6) + "," + c.longitude.toFixed(6) + "（±" + Math.round(c.accuracy) + "m）");
+    },
+    function () { go(""); },
+    { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
+  );
 })();
 </script>
 </body></html>
