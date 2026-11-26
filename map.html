@@ -51,7 +51,7 @@
   <h1>検査設備 位置マップ</h1>
   <button id="openPaste">回答データを貼り付け</button>
 </header>
-<div id="maperr">地図を読み込めませんでした（社内ネットワークで地図サーバが遮断されている可能性があります）。一覧と「Googleマップで開く」は使えます。</div>
+<div id="maperr">地図を読み込めませんでした（社内ネットワークで国土地理院の地図サーバが遮断されている可能性があります）。一覧と「Googleマップで開く」は使えます。</div>
 <div id="wrap">
   <div id="map"></div>
   <div id="side">
@@ -158,7 +158,10 @@
   const markers = new Map();
   try {
     map = L.map("map").setView([35.3, 138.93], 13);
-    const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+    const GSI = "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>国土地理院</a>";
+    const tiles = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png", { maxZoom: 18, maxNativeZoom: 18, attribution: GSI }).addTo(map);
+    const photo = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg", { maxZoom: 18, maxNativeZoom: 18, attribution: GSI });
+    L.control.layers({ "地図": tiles, "航空写真": photo }, null, { position: "topleft" }).addTo(map);
     let ok = false;
     tiles.on("tileload", () => { ok = true; $("maperr").style.display = "none"; });
     tiles.on("tileerror", () => { if (!ok) $("maperr").style.display = "block"; });
@@ -184,8 +187,8 @@
       m.on("click", () => select(g.no, false));
       markers.set(g.no, m); pts.push([g.loc.lat, g.loc.lng]);
     }
-    if (pts.length === 1) map.setView(pts[0], 18);
-    else if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 18 });
+    if (pts.length === 1) map.setView(pts[0], 17);
+    else if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
   }
 
   function filtered() {
@@ -216,7 +219,7 @@
     selected = no;
     renderList();
     const g = groups.find(x => x.no === no);
-    if (fly !== false && g && g.loc && map) { map.setView([g.loc.lat, g.loc.lng], 18); const m = markers.get(no); if (m) m.openPopup(); }
+    if (fly !== false && g && g.loc && map) { map.setView([g.loc.lat, g.loc.lng], 17); const m = markers.get(no); if (m) m.openPopup(); }
     const el = $("list").querySelector(".item.on"); if (el) el.scrollIntoView && el.scrollIntoView({ block: "nearest" });
   }
 
